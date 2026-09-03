@@ -1,0 +1,40 @@
+name: Build DFIN DSKEYS v5.7 Diagnostic Full Installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pyinstaller send2trash websocket-client cryptography
+      - name: Build application folder
+        shell: powershell
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --icon dfin_logo.ico --version-file version_info.txt --add-data "dfin_logo.png;." --add-data "dfin_logo.ico;." --name DFIN_DSKEYS_Manager --collect-all send2trash --collect-all websocket DFIN_DSKEYS_Manager.py
+      - name: Download Python installer and offline packages
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force vendor
+          Invoke-WebRequest https://www.python.org/ftp/python/3.13.7/python-3.13.7-amd64.exe -OutFile vendor/python-3.13.7-amd64.exe
+          python -m pip download --only-binary=:all: --dest vendor send2trash cryptography websocket-client
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: powershell
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" DFIN_DSKEYS_Manager.iss'
+      - name: Verify installer
+        shell: powershell
+        run: |
+          if (-not (Test-Path "installer\DFIN_DSKEYS_Manager_Setup_v5.7_DIAGNOSTIC_FULL.exe")) { throw "Installer not generated" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DFIN-DSKEYS-Manager-Setup-v5.7-DIAGNOSTIC-FULL
+          path: installer/DFIN_DSKEYS_Manager_Setup_v5.7_DIAGNOSTIC_FULL.exe
+          if-no-files-found: error
+          compression-level: 0
