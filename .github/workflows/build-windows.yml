@@ -1,4 +1,4 @@
-name: Build DFIN DSKEYS v5.7.1 Fixed Installer
+name: Build DFIN DSKEYS v5.7.3 HQ Logo Installer
 
 on:
   workflow_dispatch:
@@ -20,7 +20,20 @@ jobs:
           python-version: "3.13"
 
       - name: Install build dependencies
-        run: python -m pip install --upgrade pyinstaller send2trash websocket-client cryptography
+        run: python -m pip install --upgrade pyinstaller pillow send2trash websocket-client cryptography
+
+      - name: Generate Windows icon from high-quality logo
+        shell: powershell
+        run: |
+          if (-not (Test-Path "dfin_logo.png")) {
+            throw "dfin_logo.png is missing from the repository root"
+          }
+          python -c "from PIL import Image; im=Image.open('dfin_logo.png').convert('RGBA'); im.save('dfin_logo.ico', format='ICO', sizes=[(16,16),(20,20),(24,24),(32,32),(40,40),(48,48),(64,64),(128,128),(256,256)])"
+          if (-not (Test-Path "dfin_logo.ico")) {
+            throw "dfin_logo.ico could not be generated"
+          }
+          Get-Item dfin_logo.png
+          Get-Item dfin_logo.ico
 
       - name: Build application folder
         shell: powershell
@@ -30,21 +43,22 @@ jobs:
             --clean `
             --onedir `
             --windowed `
-            --icon dfin_logo.ico `
-            --version-file version_info.txt `
+            --icon "dfin_logo.ico" `
+            --version-file "version_info.txt" `
             --add-data "dfin_logo.png;." `
-            --name DFIN_DSKEYS_Manager `
-            --collect-all send2trash `
-            --collect-all websocket `
+            --name "DFIN_DSKEYS_Manager" `
+            --hidden-import "send2trash" `
+            --hidden-import "websocket" `
             DFIN_DSKEYS_Manager.py
 
       - name: Verify application build
         shell: powershell
         run: |
-          if (-not (Test-Path "dist\DFIN_DSKEYS_Manager\DFIN_DSKEYS_Manager.exe")) {
+          $exe = "dist\DFIN_DSKEYS_Manager\DFIN_DSKEYS_Manager.exe"
+          if (-not (Test-Path $exe)) {
             throw "DFIN application EXE was not generated"
           }
-          Get-Item "dist\DFIN_DSKEYS_Manager\DFIN_DSKEYS_Manager.exe"
+          Get-Item $exe
 
       - name: Download Python installer and offline packages
         shell: powershell
@@ -60,7 +74,7 @@ jobs:
             throw "Python installer was not downloaded"
           }
           if (-not (Test-Path "DFIN_DSKEYS_Manager.iss")) {
-            throw "Inno Setup script is missing"
+            throw "DFIN_DSKEYS_Manager.iss is missing"
           }
 
       - name: Install Inno Setup
@@ -70,19 +84,20 @@ jobs:
         shell: powershell
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" DFIN_DSKEYS_Manager.iss'
 
-      - name: Verify Windows installer
+      - name: Locate generated installer
         shell: powershell
         run: |
-          if (-not (Test-Path "installer\DFIN_DSKEYS_Manager_Setup_v5.7_DIAGNOSTIC_FULL.exe")) {
-            Write-Host "Files generated in installer folder:"
-            Get-ChildItem -Path installer -Recurse -ErrorAction SilentlyContinue
-            throw "Windows installer was not generated"
+          $file = Get-ChildItem -Path installer -Filter "*.exe" -File | Select-Object -First 1
+          if (-not $file) {
+            throw "No installer EXE was generated"
           }
+          Copy-Item $file.FullName "DFIN_DSKEYS_Manager_Setup_v5.7.3_HQ_LOGO.exe"
+          Get-Item "DFIN_DSKEYS_Manager_Setup_v5.7.3_HQ_LOGO.exe"
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: DFIN-DSKEYS-Manager-Setup-v5.7.1-FIXED
-          path: installer/DFIN_DSKEYS_Manager_Setup_v5.7_DIAGNOSTIC_FULL.exe
+          name: DFIN-DSKEYS-Manager-Setup-v5.7.3-HQ-LOGO
+          path: DFIN_DSKEYS_Manager_Setup_v5.7.3_HQ_LOGO.exe
           if-no-files-found: error
           compression-level: 0
